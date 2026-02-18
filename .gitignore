@@ -1,3 +1,4 @@
 /.idea/
 /whiteslove-tg-bot-template-repo.iml
-.env
+src/.env
+node_modules

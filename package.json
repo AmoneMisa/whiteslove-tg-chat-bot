@@ -2,17 +2,17 @@
   "name": "whiteslove-tg-chat-bot",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/AmoneMisa/whiteslove-tg-bot-template-repo.git"
   },
   "private": true,
   "dependencies": {
     "ioredis": "^5.9.3",
     "node-telegram-bot-api": "^0.67.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3"
   }
 }
