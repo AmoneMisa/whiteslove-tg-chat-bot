@@ -3,11 +3,10 @@ import { logDebug, logError, logInfo } from "./logger.js";
 import commands from "./handlers/commands/index.js";
 import callbacks from "./handlers/callbacks/index.js";
 import { clearPendingReply, getPendingReply } from "./ownerState.js";
-import { chatBridge } from "./chatBridge.js";
 
 const ownerId = Number(process.env.OWNER_ID);
 
-export default function registerHandlers() {
+export default function registerHandlers({ chatBridge }) {
     for (const commandDef of commands) {
         bot.onText(commandDef.pattern, async (msg, match) => {
             try {
@@ -25,6 +24,7 @@ export default function registerHandlers() {
     for (const callbackDef of callbacks) {
         bot.on("callback_query", async (query) => {
             if (query.data !== callbackDef.key) return;
+
             try {
                 await callbackDef.handler(query);
             } catch (error) {
@@ -47,12 +47,12 @@ export default function registerHandlers() {
         const replyToId = msg.reply_to_message?.message_id;
         if (!replyToId) return;
 
-        if (pending.messageId && pending.messageId === replyToId) return;
+        if (pending.replyMessageId && pending.replyMessageId !== replyToId) return;
 
-        const text = (msg.text || "").trim();
-        if (text && !text.startsWith("/")) {
-            await chatBridge.ownerReply(pending.sessionId, { text });
+        if (msg.text && !msg.text.startsWith("/")) {
+            await chatBridge.ownerReply(pending.sessionId, { text: msg.text });
             clearPendingReply(ownerId);
+
         }
     });
 

@@ -1,37 +1,32 @@
-import bot from './bot.js';
-import registerHandlers from './registerHandlers.js';
-import { logInfo } from './logger.js';
-import commands from './handlers/commands/index.js';
+import bot from "./bot.js";
+import registerHandlers from "./registerHandlers.js";
+import { logInfo } from "./logger.js";
+import commands from "./handlers/commands/index.js";
 
-import { createRedisClients } from './redis.js';
-import { createChatBridge } from './chatBridge.js';
-import { startNotifySubscriber } from './notifySubscriber.js';
+import { createChatBridge } from "./chatBridge.js";
+import { startNotifySubscriber } from "./notifySubscriber.js";
+import {createRedisClients} from "./redis.js";
 
 async function bootstrap() {
-    const { pub, sub } = createRedisClients({
-        host: process.env.REDIS_HOST || 'redis',
-        port: Number(process.env.REDIS_PORT || 6379),
-    });
+    const redisHost = process.env.REDIS_HOST || "redis";
+    const redisPort = Number(process.env.REDIS_PORT || 6379);
 
-    const chatBridge = createChatBridge(pub);
+    const { pub: redisPub, sub: redisSub } = createRedisClients({ host: redisHost, port: redisPort });
+    const chatBridge = createChatBridge(redisPub);
 
     registerHandlers({ chatBridge });
 
-    startNotifySubscriber({
-        bot,
-        redisSub: sub,
-        ownerId: Number(process.env.OWNER_ID),
-        chatBridge,
-    });
+    const ownerId = Number(process.env.OWNER_ID);
+    startNotifySubscriber({ bot, redisSub, ownerId, chatBridge });
 
     await bot.setMyCommands(
         commands.map((item) => ({
-            command: item.command.replace('/', ''),
+            command: item.command.replace("/", ""),
             description: item.description,
         }))
     );
 
-    logInfo('Bot started successfully');
+    logInfo("Bot started successfully");
 }
 
 bootstrap();

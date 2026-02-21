@@ -13,9 +13,9 @@ function ownerKeyboard(payload) {
     if (payload.source === "telegram") {
         return {
             inline_keyboard: [
+                [{ text: `Ответить (#${sessionId})`, callback_data: `reply:${sessionId}` }],
                 [{ text: `Связался (#${sessionId})`, callback_data: `contacted:${sessionId}` }],
                 [{ text: `Закрыть чат (#${sessionId})`, callback_data: `close:${sessionId}` }],
-                [{ text: `Ответить (#${sessionId})`, callback_data: `reply:${sessionId}` }],
             ],
         };
     }
@@ -31,7 +31,7 @@ function ownerKeyboard(payload) {
 function formatOwnerText(payload) {
     const sessionId = Number(payload.sessionId);
     const type = payload.source === "telegram" ? "Telegram" : "Сайт";
-    const header = sessionId ? `Новое сообщение. (Сессия #${sessionId})` : "Новое сообщение.";
+    const header = sessionId ? `Новое сообщение (сессия #${sessionId}).` : "Новое сообщение.";
 
     const tg = payload.source === "telegram" && payload.tgUsername ? `\nНик пользователя: ${payload.tgUsername}` : "";
     const text = payload.text ? `\nСообщение: ${payload.text}` : "";
@@ -40,13 +40,12 @@ function formatOwnerText(payload) {
 }
 
 async function removeKeyboardSafely(bot, q) {
+    const chatId = q?.message?.chat?.id;
     const messageId = q?.message?.message_id;
-    if (!messageId) return;
+    if (!chatId || !messageId) return;
+
     try {
-        await bot.editMessageReplyMarkup(
-            { inline_keyboard: [] },
-            { chat_id: q.message.chat.id, message_id: messageId }
-        );
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
     } catch {}
 }
 
@@ -92,13 +91,16 @@ export function startNotifySubscriber({ bot, redisSub, ownerId, chatBridge }) {
         }
 
         if (action === "reply") {
-            setPendingReply(ownerId, sessionId, q?.message?.message_id || 0);
-
             try {
-                await bot.sendMessage(ownerId, `Ответьте на это сообщение — и я отправлю ответ в сессию #${sessionId}`, {
-                    reply_markup: { force_reply: true },
-                });
-            } catch {}
+                const sent = await bot.sendMessage(
+                    ownerId,
+                    `Ответьте на это сообщение — я отправлю ответ в сессию #${sessionId}`,
+                    { reply_markup: { force_reply: true } }
+                );
+                setPendingReply(ownerId, sessionId, sent?.message_id || 0);
+            } catch {
+                setPendingReply(ownerId, sessionId, 0);
+            }
 
             try { await bot.answerCallbackQuery(q.id, { text: `Ожидаю ответ для #${sessionId}` }); } catch {}
             return;

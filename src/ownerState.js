@@ -1,9 +1,9 @@
 const pendingByOwner = new Map();
 
-export function setPendingReply(ownerId, sessionId, messageId) {
+export function setPendingReply(ownerId, sessionId, replyMessageId) {
     pendingByOwner.set(String(ownerId), {
         sessionId: Number(sessionId),
-        messageId: Number(messageId),
+        replyMessageId: Number(replyMessageId || 0),
         createdAt: Date.now(),
     });
 }
