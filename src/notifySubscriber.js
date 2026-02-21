@@ -1,5 +1,5 @@
 import { shouldSendNow } from "./antiSpam.js";
-import { setPendingReply } from "./ownerState.js";
+import { setPendingReply, clearPendingReply } from "./ownerState.js";
 
 function parseMessage(m) {
     if (Buffer.isBuffer(m)) return JSON.parse(m.toString("utf8"));
@@ -8,27 +8,46 @@ function parseMessage(m) {
 
 function ownerKeyboard(payload) {
     const sessionId = Number(payload.sessionId);
+    if (!sessionId) return { inline_keyboard: [] };
+
     if (payload.source === "telegram") {
         return {
             inline_keyboard: [
-                [{ text: "Связался", callback_data: `contacted:${sessionId}` }],
-                [{ text: "Закрыть чат", callback_data: `close:${sessionId}` }],
+                [{ text: `Связался (#${sessionId})`, callback_data: `contacted:${sessionId}` }],
+                [{ text: `Закрыть чат (#${sessionId})`, callback_data: `close:${sessionId}` }],
+                [{ text: `Ответить (#${sessionId})`, callback_data: `reply:${sessionId}` }],
             ],
         };
     }
+
     return {
         inline_keyboard: [
-            [{ text: "Ответить", callback_data: `reply:${sessionId}` }],
-            [{ text: "Закрыть чат", callback_data: `close:${sessionId}` }],
+            [{ text: `Ответить (#${sessionId})`, callback_data: `reply:${sessionId}` }],
+            [{ text: `Закрыть чат (#${sessionId})`, callback_data: `close:${sessionId}` }],
         ],
     };
 }
 
 function formatOwnerText(payload) {
+    const sessionId = Number(payload.sessionId);
     const type = payload.source === "telegram" ? "Telegram" : "Сайт";
+    const header = sessionId ? `Новое сообщение. (Сессия #${sessionId})` : "Новое сообщение.";
+
     const tg = payload.source === "telegram" && payload.tgUsername ? `\nНик пользователя: ${payload.tgUsername}` : "";
     const text = payload.text ? `\nСообщение: ${payload.text}` : "";
-    return `Новое сообщение.\nТип: ${type}${tg}${text}`;
+
+    return `${header}\nТип: ${type}${tg}${text}`;
+}
+
+async function removeKeyboardSafely(bot, q) {
+    const messageId = q?.message?.message_id;
+    if (!messageId) return;
+    try {
+        await bot.editMessageReplyMarkup(
+            { inline_keyboard: [] },
+            { chat_id: q.message.chat.id, message_id: messageId }
+        );
+    } catch {}
 }
 
 export function startNotifySubscriber({ bot, redisSub, ownerId, chatBridge }) {
@@ -73,20 +92,31 @@ export function startNotifySubscriber({ bot, redisSub, ownerId, chatBridge }) {
         }
 
         if (action === "reply") {
-            setPendingReply(ownerId, sessionId);
-            try { await bot.answerCallbackQuery(q.id, { text: "Напишите ответ следующим сообщением" }); } catch {}
+            setPendingReply(ownerId, sessionId, q?.message?.message_id || 0);
+
+            try {
+                await bot.sendMessage(ownerId, `Ответьте на это сообщение — и я отправлю ответ в сессию #${sessionId}`, {
+                    reply_markup: { force_reply: true },
+                });
+            } catch {}
+
+            try { await bot.answerCallbackQuery(q.id, { text: `Ожидаю ответ для #${sessionId}` }); } catch {}
             return;
         }
 
         if (action === "close") {
             await chatBridge.closeSession(sessionId, "closed_by_owner");
-            try { await bot.answerCallbackQuery(q.id, { text: "Чат закрыт" }); } catch {}
+            await removeKeyboardSafely(bot, q);
+            clearPendingReply(ownerId);
+            try { await bot.answerCallbackQuery(q.id, { text: `Чат #${sessionId} закрыт` }); } catch {}
             return;
         }
 
         if (action === "contacted") {
             await chatBridge.closeSession(sessionId, "contacted");
-            try { await bot.answerCallbackQuery(q.id, { text: "Сессия закрыта" }); } catch {}
+            await removeKeyboardSafely(bot, q);
+            clearPendingReply(ownerId);
+            try { await bot.answerCallbackQuery(q.id, { text: `Сессия #${sessionId} закрыта` }); } catch {}
             return;
         }
 
