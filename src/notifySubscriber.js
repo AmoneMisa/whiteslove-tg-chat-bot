@@ -1,4 +1,4 @@
-import { shouldSendNow } from "./antiSpam.js";
+import sendMessage from "./methods/sendMessage.js";
 import { setPendingReply, clearPendingReply } from "./ownerState.js";
 
 function parseMessage(m) {
@@ -63,14 +63,11 @@ export function startNotifySubscriber({ bot, redisSub, ownerId, chatBridge }) {
         const sessionId = Number(payload.sessionId);
         if (!sessionId) return;
 
-        const spamKey = `owner:${ownerId}:session:${sessionId}`;
-        if (!shouldSendNow(spamKey, 1500)) return;
-
         const text = formatOwnerText(payload);
         const reply_markup = ownerKeyboard(payload);
 
         try {
-            await bot.sendMessage(ownerId, text, { reply_markup });
+            await sendMessage(ownerId, text, { reply_markup });
         } catch {}
     });
 
